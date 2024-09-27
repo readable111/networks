@@ -10,9 +10,8 @@
 #include <ctype.h>
 #include <unistd.h>
 
-
-#define PORT 80
-#define SA struct sockaddr 
+#define PORT 11111
+#define SA struct sockaddr
 
 int socketConnect(char *host, in_port_t port){
     struct hostent *hp;
@@ -43,10 +42,23 @@ int socketConnect(char *host, in_port_t port){
 void server(int connfd){
     char buff[255];
     char buff2[1024];
-    int osockfd;
+    int osockfd, count=0;
+    int file, cachefilefd; 
+    char* urls[10];
+    cachefilefd = open("urls.txt", O_RDWR | O_CREAT | O_TRUNC);
     for(;;){
         bzero(buff, sizeof(buff));
         read(connfd, buff, sizeof(buff));
+        if(count < 10){
+            urls[count] = buff;
+        }
+        else{
+            for(int i=0; i<9; i++){
+               urls[i] = urls[i+1]; 
+            }
+            urls[9]= buff;
+        }
+
         osockfd = socketConnect(buff, osockfd);
         write(osockfd, "GET /\r\n", strlen("GET /\r\n"));
         bzero(buff2, sizeof(buff2));
@@ -54,7 +66,12 @@ void server(int connfd){
             fprintf(stderr, "%s", buff2);
             bzero(buff2, sizeof(buff));
         }
+
+        file = open(buff, O_CREAT | O_RDWR | O_TRUNC );
+        write(cachefilefd, buff, sizeof(buff));
+        write(file, buff2, sizeof(buff2));
         write(connfd, buff2, sizeof(buff2));
+        count++;
     }
     shutdown(osockfd, SHUT_RDWR);
     close(osockfd);
@@ -70,34 +87,36 @@ int main(){
 		exit(0);
 	}
 	else{
-		printf("Socket created successfully");
+		printf("Socket created successfully\n");
 	}
 
-    bzero(&serveraddr, sizeof(serveraddr));
     serveraddr.sin_family = AF_INET;
-	serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
-	
+    serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    serveraddr.sin_port = htons(PORT);
 
-    if(bind(sockfd, (SA*)&serveraddr, sizeof(serveraddr))!=0){
+    if(bind(sockfd, (struct sockaddr*)&serveraddr, sizeof(serveraddr)) !=0){
         printf("socket bind failed");
         exit(0);
     }
     else{
-        printf("socket bound successfully");
+        printf("socket bound successfully\n");
     }
 
-    if(listen(sockfd,5) != 0){
+    if(listen(sockfd, 5) != 0){
         exit(0);
     }
     else{
-        printf("listening on port: %d", PORT);
+        printf("listening on port: %d\n", PORT);
     }
 
     int len = sizeof(cli);
+
 	connfd = accept(sockfd, (SA*)&cli, &len);
 	if(connfd <0){
-		printf("Server accept failed");
+		printf("Server accept failed\n");
 		exit(0);
 	}
+	server(connfd);
+
     return 0;
 }
